@@ -73,8 +73,7 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args) {
 
             execv(args[0], args);
 
-            int err = errno;
-            fprintf(stderr, "Error: Could not spawn program: %s, %s\n", args[0], strerror(err));
+            fprintf(stderr, "Error: Could not spawn program: %s, %s\n", args[0], strerror(errno));
             exit(3);
 
         } else {
@@ -95,8 +94,7 @@ static int write_fully(int fd, char* buf, int count) {
         int written = write(fd, buf, count);
 
         if (written < GOOD) {
-            int err = errno;
-            fprintf(stderr, "Error: Could not write from parent to fd: %d, %s\n", fd, strerror(err));
+            fprintf(stderr, "Error: Could not write from parent to fd: %d, %s\n", fd, strerror(errno));
             return written;
         }
         buf += written;
@@ -197,8 +195,7 @@ int main(int argc, char** argv) {
 
     for (i = 0; i < numpids; ++i) {
         if (close(fds[i]) < GOOD) {
-            int err = errno;
-            fprintf(stderr, "Error: Could not close child stdin fd: %d, %s\n", fds[i], strerror(err));
+            fprintf(stderr, "Error: Could not close child stdin fd: %d, %s\n", fds[i], strerror(errno));
             /* continue anyway */
         }
     }
@@ -207,8 +204,7 @@ int main(int argc, char** argv) {
         int status;
 
         if (waitpid(pids[i], &status, 0) < GOOD) {
-            int err = errno;
-            fprintf(stderr, "Error: Could not wait for child pid: %d, %s\n", pids[i], strerror(err));
+            fprintf(stderr, "Error: Could not wait for child pid: %d, %s\n", pids[i], strerror(errno));
             /* continue anyway */
         }
 
