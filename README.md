@@ -31,6 +31,7 @@ can be used to parallelize the processing of large amounts of input.
 
 Proof of concept:
 
+```sh
 $ time ./paracat 2 -- /usr/bin/wc -w < /tmp/somefile
 14499594
 14500406
@@ -45,3 +46,4 @@ $ time /usr/bin/wc -w /tmp/somefile
 real0m5.301s
 user0m5.196s
 sys0m0.088s
+```
