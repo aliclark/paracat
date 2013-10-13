@@ -124,11 +124,11 @@ static int read_write_from_children(int* outfds, int numchildren) {
 
                         if (saved > 0) {
                             if (write_fully(STDOUT_FD, buf, saved) < GOOD) {
-                                _exit(1);
+                                return ERR;
                             }
                         }
                         if (data_size < GOOD) {
-                            _exit(1);
+                            return ERR;
                         }
 
                         for (j = i + 1; j < numchildren; ++j) {
@@ -139,7 +139,7 @@ static int read_write_from_children(int* outfds, int numchildren) {
                         --numchildren;
 
                         if (numchildren == 0) {
-                            _exit(0);
+                            return GOOD;
                         }
 
                         FD_CLR(curfd, &rfds);
@@ -287,7 +287,11 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args, b
                 }
             }
 
-            read_write_from_children(outfds, numchildren);
+            if (read_write_from_children(outfds, numchildren) < GOOD) {
+                _exit(1);
+            }
+
+            _exit(0);
 
         } else {
             *recombine_pid = pid;
