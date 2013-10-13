@@ -379,7 +379,7 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args, b
 int main(int argc, char** argv) {
     pid_t* pids;
     int* fds;
-    int i;
+    int i, childfail;
     int numpids = 0;
     char* end = NULL;
     char** command;
@@ -483,6 +483,7 @@ int main(int argc, char** argv) {
         }
     }
 
+    childfail = 0;
     for (i = 0; i < numpids; ++i) {
         if (waitpid(pids[i], &status, NO_OPTIONS) < GOOD) {
             fprintf(stderr, "Error: Could not wait for child pid: %d, %s\n", pids[i], strerror(errno));
@@ -491,6 +492,7 @@ int main(int argc, char** argv) {
 
         if (status != GOOD) {
             fprintf(stderr, "Warning: got exit status: %d, from child pid: %d\n", status, pids[i]);
+            childfail |= 8;
         }
     }
 
@@ -502,8 +504,9 @@ int main(int argc, char** argv) {
 
         if (status != GOOD) {
             fprintf(stderr, "Warning: got exit status: %d, from reader pid: %d\n", status, recombine_pid);
+            childfail |= 16;
         }
     }
 
-    return EXIT_SUCCESS;
+    return childfail;
 }
