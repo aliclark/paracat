@@ -96,12 +96,12 @@ static int read_write_from_children(int* outfds, int numchildren) {
 
     nfds = get_nfds(outfds, numchildren);
 
-    while (TRUE) {
-        FD_ZERO(&rfds);
-        for (i = 0; i < numchildren; ++i) {
-            FD_SET(outfds[i], &rfds);
-        }
+    FD_ZERO(&rfds);
+    for (i = 0; i < numchildren; ++i) {
+        FD_SET(outfds[i], &rfds);
+    }
 
+    while (TRUE) {
         if (select(nfds, &rfds, NULL, NULL, NULL) < GOOD) {
             perror("Error: could not select child input");
         }
@@ -140,7 +140,9 @@ static int read_write_from_children(int* outfds, int numchildren) {
                             _exit(0);
                         }
 
+                        FD_CLR(curfd, &rfds);
                         nfds = get_nfds(outfds, numchildren);
+
                         /* re-evaluate this loop number */
                         --i;
                         break;
@@ -180,6 +182,9 @@ static int read_write_from_children(int* outfds, int numchildren) {
                         break;
                     }
                 }
+
+            } else {
+                FD_SET(curfd, &rfds);
             }
         }
     }
