@@ -48,12 +48,14 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args) {
     int i;
 
     for (i = 0; i < numchildren; ++i) {
+        pid_t pid;
+
         if (pipe(fd) < GOOD) {
             perror("Error: Could not create communication pipe");
             return ERR;
         }
 
-        pid_t pid = fork();
+        pid = fork();
 
         if (pid < GOOD) {
             perror("Error: Could not fork a child process");
@@ -111,6 +113,8 @@ static int read_write_loop(int* fds, int fdtop) {
     char buf[BUF_COUNT];
 
     while (TRUE) {
+        char* buf_part_top;
+        int nlpos;
         int data_size = read(STDIN_FD, buf, BUF_COUNT);
 
         if (data_size <= 0) {
@@ -120,7 +124,7 @@ static int read_write_loop(int* fds, int fdtop) {
             return data_size;
         }
 
-        char* buf_part_top = buf + data_size;
+        buf_part_top = buf + data_size;
 
         while (buf_part_top --> buf) {
             if (*buf_part_top == NEWLINE_CH) {
@@ -128,7 +132,7 @@ static int read_write_loop(int* fds, int fdtop) {
             }
         }
 
-        int nlpos = buf_part_top - buf;
+        nlpos = buf_part_top - buf;
 
         if (nlpos < GOOD) {
             if (write_fully(curfd, buf, data_size) < GOOD) {
@@ -160,6 +164,8 @@ int main(int argc, char** argv) {
     pid_t* pids;
     int* fds;
     int i;
+    int numpids;
+    char* end = NULL;
 
     if (argc < 4) {
         fputs("Error: Not enough parameters\n", stderr);
@@ -172,8 +178,7 @@ int main(int argc, char** argv) {
         return 5;
     }
 
-    char *end = NULL;
-    int numpids = strtol(argv[1], &end, 10);
+    numpids = strtol(argv[1], &end, 10);
     if (*end) {
         perror("Error: Could not parse spawn count");
         return 1;
