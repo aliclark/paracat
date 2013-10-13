@@ -380,7 +380,7 @@ int main(int argc, char** argv) {
     char** command;
     int status;
 
-    pid_t recombine_pid;
+    pid_t recombine_pid = 0;
     int recombine_flag = 1;
 
     struct option long_options[] = {
