@@ -496,12 +496,12 @@ int main(int argc, char** argv) {
 
     if (recombine_flag) {
         if (waitpid(recombine_pid, &status, NO_OPTIONS) < GOOD) {
-            fprintf(stderr, "Error: Could not wait for reader pid: %d, %s\n", pids[i], strerror(errno));
+            fprintf(stderr, "Error: Could not wait for reader pid: %d, %s\n", recombine_pid, strerror(errno));
             /* continue anyway */
         }
 
         if (status != GOOD) {
-            fprintf(stderr, "Warning: got exit status: %d, from reader pid: %d\n", status, pids[i]);
+            fprintf(stderr, "Warning: got exit status: %d, from reader pid: %d\n", status, recombine_pid);
         }
     }
 
