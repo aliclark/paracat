@@ -70,8 +70,21 @@ static int write_fully(int fd, char* buf, int count) {
     return GOOD;
 }
 
+static int get_nfds(int* outfds, int numchildren) {
+    int i, nfds = -1;
+    for (i = 0; i < numchildren; ++i) {
+        int outfd = outfds[i];
+        if (outfd > nfds) {
+            nfds = outfd;
+        }
+    }
+    nfds += 1;
+
+    return nfds;
+}
+
 static int read_write_from_children(int* outfds, int numchildren) {
-    int i;
+    int i, nfds;
     fd_set rfds;
     char** buffers = (char**)malloc(sizeof(char*) * numchildren);
     int* buffered = (int*)malloc(sizeof(int) * numchildren);
@@ -81,18 +94,15 @@ static int read_write_from_children(int* outfds, int numchildren) {
         buffered[i] = 0;
     }
 
+    nfds = get_nfds(outfds, numchildren);
+
     while (TRUE) {
-        int nfds = -1;
         FD_ZERO(&rfds);
         for (i = 0; i < numchildren; ++i) {
-            int outfd = outfds[i];
-            if (outfd > nfds) {
-                nfds = outfd;
-            }
-            FD_SET(outfd, &rfds);
+            FD_SET(outfds[i], &rfds);
         }
 
-        if (select(nfds + 1, &rfds, NULL, NULL, NULL) < GOOD) {
+        if (select(nfds, &rfds, NULL, NULL, NULL) < GOOD) {
             perror("Error: could not select child input");
         }
 
@@ -129,6 +139,7 @@ static int read_write_from_children(int* outfds, int numchildren) {
                             _exit(0);
                         }
 
+                        nfds = get_nfds(outfds, numchildren);
                         /* re-evaluate this loop number */
                         --i;
                         break;
