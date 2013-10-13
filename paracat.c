@@ -117,18 +117,27 @@ static int read_write_loop(int* fds, int fdtop) {
     int curfd = fds[fdpos];
     char buf[BUF_COUNT];
 
+    int part_two = 0;
+    int read_amount = BUF_COUNT;
+
     while (TRUE) {
         char* buf_part_top;
         int nlpos;
-        int data_size = read(STDIN_FD, buf, BUF_COUNT);
+        int data_size = read(STDIN_FD, buf + part_two, read_amount);
 
         if (data_size <= 0) {
+            if (part_two > 0) {
+                if (write_fully(curfd, buf, part_two) < GOOD) {
+                    return ERR;
+                }
+            }
             if (data_size < GOOD) {
                 perror("Error: Could not read from parent stdin");
             }
             return data_size;
         }
 
+        data_size += part_two;
         buf_part_top = buf + data_size;
 
         while (buf_part_top --> buf) {
@@ -144,6 +153,9 @@ static int read_write_loop(int* fds, int fdtop) {
                 return ERR;
             }
 
+            part_two = 0;
+            read_amount = BUF_COUNT;
+
         } else {
             int part_one = nlpos + 1;
 
@@ -158,9 +170,9 @@ static int read_write_loop(int* fds, int fdtop) {
             }
             curfd = fds[fdpos];
 
-            if (write_fully(curfd, buf + part_one, data_size - part_one) < GOOD) {
-                return ERR;
-            }
+            part_two = data_size - part_one;
+            read_amount = BUF_COUNT - part_two;
+            memcpy(buf, buf + part_one, part_two);
         }
     }
 }
