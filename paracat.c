@@ -19,6 +19,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
+#include <getopt.h>
 
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -48,7 +49,7 @@
 #define CHILD 0
 #define NO_OPTIONS 0
 
-#define USAGE_STRING "Usage: paracat NUMPROCS -- COMMAND ARG1 ARG2 ...\n"
+#define USAGE_STRING "Usage: paracat -n NUMPROCS -- COMMAND ARG1 ARG2 ...\n"
 
 typedef int bool;
 
@@ -180,16 +181,15 @@ static int read_write_from_children(int* outfds, int numchildren) {
     }
 }
 
-static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args) {
+static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args, bool recombine_flag) {
     int fd[2];
     int out[2];
     int i;
 
-    bool isSynch = TRUE;
     int* outfds = NULL;
     pid_t pid;
 
-    if (isSynch) {
+    if (recombine_flag) {
         outfds = (int*)malloc(sizeof(int) * numchildren);
     }
 
@@ -200,7 +200,7 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args) {
             return ERR;
         }
 
-        if (isSynch) {
+        if (recombine_flag) {
             if (pipe(out) < GOOD) {
                 perror("Error: Could not create output communication pipe");
                 return ERR;
@@ -226,7 +226,7 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args) {
                 _exit(2);
             }
 
-            if (isSynch) {
+            if (recombine_flag) {
                 if (dup2(out[1], STDOUT_FD) < GOOD) {
                     perror("Error: Could not duplicate child process output to stdout");
                     exit(1);
@@ -248,7 +248,7 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args) {
             }
             fds[i] = fd[1];
 
-            if (isSynch) {
+            if (recombine_flag) {
                 if (close(out[1]) < GOOD) {
                     perror("Error: Could not close parent process pipe's input");
                     return ERR;
@@ -260,7 +260,7 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args) {
         }
     }
 
-    if (isSynch) {
+    if (recombine_flag) {
         pid = fork();
 
         if (pid < GOOD) {
@@ -362,33 +362,76 @@ int main(int argc, char** argv) {
     pid_t* pids;
     int* fds;
     int i;
-    int numpids;
+    int numpids = 0;
     char* end = NULL;
+    char** command;
 
-    if (argc < 4) {
-        fputs("Error: Not enough parameters\n", stderr);
+    int recombine_flag = 1;
+
+    struct option long_options[] = {
+        {"no-recombine", no_argument, &recombine_flag, 0},
+        {"help",         no_argument, NULL,            'h'},
+        {0, 0, 0, 0}
+    };
+
+    while (TRUE) {
+        int option_index = 0;
+        int c = getopt_long(argc, argv, "hn:", long_options, &option_index);
+     
+        if (c == -1) {
+            break;
+        }
+
+        switch (c) {
+        case 0:
+            break;
+
+        case 'h':
+            fputs(USAGE_STRING, stderr);
+            return 0;
+     
+        case 'n':
+            numpids = strtol(optarg, &end, NUM_BASE);
+            if (*end) {
+                fprintf(stderr, "Error: Could not parse spawn count: %s\n", end);
+                return 1;
+            }
+            if (numpids < 1) {
+                fputs("Error: spawn count must be 1 or greater\n", stderr);
+                return 1;
+            }
+            break;
+     
+        default:
+            fputs(USAGE_STRING, stderr);
+            return 1;
+        }
+    }
+
+    if (numpids == 0) {
+        fputs("Parameter -n is required.\n", stderr);
         fputs(USAGE_STRING, stderr);
         return 5;
     }
 
-    if (strcmp("--", argv[2]) != GOOD) {
+    if (strcmp("--", argv[optind - 1]) != GOOD) {
+        fputs("Command separator -- is required.\n", stderr);
         fputs(USAGE_STRING, stderr);
         return 5;
     }
 
-    numpids = strtol(argv[1], &end, NUM_BASE);
-    if (*end) {
-        perror("Error: Could not parse spawn count");
-        return 1;
+    if (optind >= argc) {
+        fputs("Please specify a command after the -- separator.\n", stderr);
+        fputs(USAGE_STRING, stderr);
+        return 5;
     }
-    if (numpids < 1) {
-        fputs("Error: spawn count must be 1 or greater\n", stderr);
-    }
+
+    command = argv + optind;
 
     pids = (pid_t*)malloc(sizeof(pid_t) * numpids);
     fds = (int*)malloc(sizeof(int) * numpids);
 
-    if (spawn_children(pids, fds, numpids, argv + 3) < GOOD) {
+    if (spawn_children(pids, fds, numpids, command, recombine_flag) < GOOD) {
         return 2;
     }
 
