@@ -11,10 +11,6 @@ child processes.
 The spawned processes will always receive chunks as full lines - a
 line is never sent partially to more than one process.
 
-No effort is made to recombine the stdout of the children cleanly,
-output data may become interleaved if not handled explicitly (eg. by
-writing the data to separate files).
-
 
 Performance is copmarable to "cat", but with some time lost due to
 rounding chunks to the nearest newline, and some time lost in spawning

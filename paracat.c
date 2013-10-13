@@ -36,9 +36,11 @@
 
 #define NEWLINE_CH 10
 
+#define FALSE 0
 #define TRUE 1
 
 #define STDIN_FD 0
+#define STDOUT_FD 1
 
 #define GOOD 0
 #define ERR -1
@@ -48,53 +50,7 @@
 
 #define USAGE_STRING "Usage: paracat NUMPROCS -- COMMAND ARG1 ARG2 ...\n"
 
-static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args) {
-    int fd[2];
-    int i;
-
-    for (i = 0; i < numchildren; ++i) {
-        pid_t pid;
-
-        if (pipe(fd) < GOOD) {
-            perror("Error: Could not create communication pipe");
-            return ERR;
-        }
-
-        pid = fork();
-
-        if (pid < GOOD) {
-            perror("Error: Could not fork a child process");
-            return pid;
-        }
-
-        if (pid == CHILD) {
-            if (dup2(fd[0], STDIN_FD) < GOOD) {
-                perror("Error: Could not duplicate child process input to stdin");
-                _exit(1);
-            }
-
-            if (close(fd[1]) < GOOD) {
-                perror("Error: Could not close child process pipe's output");
-                _exit(2);
-            }
-
-            execv(args[0], args);
-
-            fprintf(stderr, "Error: Could not spawn program: %s, %s\n", args[0], strerror(errno));
-            _exit(3);
-
-        } else {
-            if (close(fd[0]) < GOOD) {
-                perror("Error: Could not close parent process pipe's input");
-                return ERR;
-            }
-            pids[i] = pid;
-            fds[i] = fd[1];
-        }
-    }
-
-    return GOOD;
-}
+typedef int bool;
 
 static int write_fully(int fd, char* buf, int count) {
     do {
@@ -108,6 +64,229 @@ static int write_fully(int fd, char* buf, int count) {
         count -= written;
 
     } while (count > 0);
+
+    return GOOD;
+}
+
+static int read_write_from_children(int* outfds, int numchildren) {
+    char* buf;
+    int i, fdtop, fdpos, curfd, saved;
+    char** buffers = (char**)malloc(sizeof(char*) * numchildren);
+    int* buffered = (int*)malloc(sizeof(int) * numchildren);
+    bool* closed = (int*)malloc(sizeof(bool) * numchildren);
+
+    for (i = 0; i < numchildren; ++i) {
+        buffers[i] = (char*)malloc(sizeof(char) * BUF_COUNT);
+        buffered[i] = 0;
+        closed[i] = FALSE;
+    }
+
+    fdtop = numchildren - 1;
+    fdpos = 0;
+
+    curfd = outfds[fdpos];
+    saved = buffered[fdpos];
+    buf = buffers[fdpos];
+
+    /*
+      Round-robin reading data from the stdouts.
+
+      TODO: this is bad because we may block on a child that has
+      nothing to output while another is spewing output - use
+      non-blocking io.
+    */
+
+    while (TRUE) {
+        int nlpos;
+        char* buf_part_top;
+        int data_size = read(curfd, buf + saved, BUF_COUNT - saved);
+
+        if (data_size <= 0) {
+            int startpos = fdpos;
+
+            if (saved > 0) {
+                if (write_fully(STDOUT_FD, buf, saved) < GOOD) {
+                    _exit(1);
+                }
+            }
+            if (data_size < GOOD) {
+                _exit(1);
+            }
+
+            closed[fdpos] = TRUE;
+
+            do {
+                if (fdpos >= fdtop) {
+                    fdpos = 0;
+                } else {
+                    ++fdpos;
+                }
+                if (!closed[fdpos]) {
+                    break;
+                }
+            } while (fdpos != startpos);
+
+            if (fdpos == startpos) {
+                /* Couldn't find an open input, time to exit */
+                _exit(0);
+            }
+
+            curfd = outfds[fdpos];
+            saved = buffered[fdpos];
+            buf = buffers[fdpos];
+        }
+
+        data_size += saved;
+        buf_part_top = buf + data_size;
+
+        while (buf_part_top --> buf) {
+            if (*buf_part_top == NEWLINE_CH) {
+                break;
+            }
+        }
+
+        nlpos = buf_part_top - buf;
+
+        if (nlpos < GOOD) {
+            if (write_fully(STDOUT_FD, buf, data_size) < GOOD) {
+                return ERR;
+            }
+
+            saved = 0;
+
+        } else {
+            int part_one = nlpos + 1;
+
+            if (write_fully(STDOUT_FD, buf, part_one) < GOOD) {
+                return ERR;
+            }
+
+            saved = data_size - part_one;
+
+            /* XXX: overlap? */
+            memcpy(buf, buf + part_one, saved);
+            buffered[fdpos] = saved;
+
+            if (fdpos >= fdtop) {
+                fdpos = 0;
+            } else {
+                ++fdpos;
+            }
+
+            curfd = outfds[fdpos];
+            saved = buffered[fdpos];
+            buf = buffers[fdpos];
+        }
+    }
+}
+
+static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args) {
+    int fd[2];
+    int out[2];
+    int i;
+
+    bool isSynch = TRUE;
+    int* outfds = NULL;
+    pid_t pid;
+
+    if (isSynch) {
+        outfds = (int*)malloc(sizeof(int) * numchildren);
+    }
+
+    for (i = 0; i < numchildren; ++i) {
+
+        if (pipe(fd) < GOOD) {
+            perror("Error: Could not create input communication pipe");
+            return ERR;
+        }
+
+        if (isSynch) {
+            if (pipe(out) < GOOD) {
+                perror("Error: Could not create output communication pipe");
+                return ERR;
+            }
+        }
+
+        pid = fork();
+
+        if (pid < GOOD) {
+            perror("Error: Could not fork a child process");
+            return pid;
+        }
+
+        if (pid == CHILD) {
+
+            if (dup2(fd[0], STDIN_FD) < GOOD) {
+                perror("Error: Could not duplicate child process input to stdin");
+                _exit(1);
+            }
+
+            if (close(fd[1]) < GOOD) {
+                perror("Error: Could not close child process input pipe's output");
+                _exit(2);
+            }
+
+            if (isSynch) {
+                if (dup2(out[1], STDOUT_FD) < GOOD) {
+                    perror("Error: Could not duplicate child process output to stdout");
+                    exit(1);
+                }
+
+                if (close(out[0]) < GOOD) {
+                    perror("Error: Could not close child process output pipe's input");
+                    exit(2);
+                }
+            }
+
+            execv(args[0], args);
+            _exit(3);
+
+        } else {
+            if (close(fd[0]) < GOOD) {
+                perror("Error: Could not close parent process pipe's input");
+                return ERR;
+            }
+            fds[i] = fd[1];
+
+            if (isSynch) {
+                if (close(out[1]) < GOOD) {
+                    perror("Error: Could not close parent process pipe's input");
+                    return ERR;
+                }
+                outfds[i] = out[0];
+            }
+
+            pids[i] = pid;
+        }
+    }
+
+    if (isSynch) {
+        pid = fork();
+
+        if (pid < GOOD) {
+            perror("Error: Could not fork a child process");
+            return pid;
+        }
+
+        if (pid == CHILD) {
+            for (i = 0; i < numchildren; ++i) {
+                if (close(fds[i]) < GOOD) {
+                    perror("Error: Could not close parent process pipe's output");
+                    return ERR;
+                }
+            }
+
+            read_write_from_children(outfds, numchildren);
+
+        } else {
+            for (i = 0; i < numchildren; ++i) {
+                if (close(outfds[i]) < GOOD) {
+                    perror("Error: Could not close parent process pipe's output");
+                    return ERR;
+                }
+            }
+        }
+    }
 
     return GOOD;
 }
