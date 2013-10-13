@@ -70,18 +70,18 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args) {
         if (pid == CHILD) {
             if (dup2(fd[0], STDIN_FD) < GOOD) {
                 perror("Error: Could not duplicate child process input to stdin");
-                exit(1);
+                _exit(1);
             }
 
             if (close(fd[1]) < GOOD) {
                 perror("Error: Could not close child process pipe's output");
-                exit(2);
+                _exit(2);
             }
 
             execv(args[0], args);
 
             fprintf(stderr, "Error: Could not spawn program: %s, %s\n", args[0], strerror(errno));
-            exit(3);
+            _exit(3);
 
         } else {
             if (close(fd[0]) < GOOD) {
