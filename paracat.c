@@ -44,6 +44,7 @@
 #define ERR -1
 
 #define CHILD 0
+#define NO_OPTIONS 0
 
 #define USAGE_STRING "Usage: paracat NUMPROCS -- COMMAND ARG1 ARG2 ...\n"
 
@@ -212,7 +213,7 @@ int main(int argc, char** argv) {
     for (i = 0; i < numpids; ++i) {
         int status;
 
-        if (waitpid(pids[i], &status, 0) < GOOD) {
+        if (waitpid(pids[i], &status, NO_OPTIONS) < GOOD) {
             fprintf(stderr, "Error: Could not wait for child pid: %d, %s\n", pids[i], strerror(errno));
             /* continue anyway */
         }
