@@ -389,7 +389,7 @@ int main(int argc, char** argv) {
         {0, 0, 0, 0}
     };
 
-    char** argv_copy = malloc(sizeof(char**) * argc);
+    char** argv_copy = (char**)malloc(sizeof(char**) * argc);
     for (i = 0; i < argc; ++i) {
         argv_copy[i] = argv[i];
     }
