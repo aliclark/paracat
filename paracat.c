@@ -30,6 +30,10 @@
 #define BUF_COUNT 4096
 #endif
 
+#ifndef NUM_BASE
+#define NUM_BASE 10
+#endif
+
 #define NEWLINE_CH 10
 
 #define TRUE 1
@@ -178,7 +182,7 @@ int main(int argc, char** argv) {
         return 5;
     }
 
-    numpids = strtol(argv[1], &end, 10);
+    numpids = strtol(argv[1], &end, NUM_BASE);
     if (*end) {
         perror("Error: Could not parse spawn count");
         return 1;
