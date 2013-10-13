@@ -52,7 +52,9 @@
 
 #define USAGE_STRING "Usage: paracat -n NUMPROCS -- COMMAND ARG1 ARG2 ...\n"
 
+#ifndef __cplusplus
 typedef int bool;
+#endif
 
 static int write_fully(int fd, char* buf, int count) {
     do {
