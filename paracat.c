@@ -128,6 +128,7 @@ static int read_write_from_children(int* outfds, int numchildren) {
                             }
                         }
                         if (data_size < GOOD) {
+                            perror("Error: Could not read from child stdout");
                             return ERR;
                         }
 
