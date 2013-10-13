@@ -56,6 +56,19 @@
 typedef int bool;
 #endif
 
+static int get_nfds(int* outfds, int numchildren) {
+    int i, nfds = -1;
+    for (i = 0; i < numchildren; ++i) {
+        int outfd = outfds[i];
+        if (outfd > nfds) {
+            nfds = outfd;
+        }
+    }
+    nfds += 1;
+
+    return nfds;
+}
+
 static int write_fully(int fd, char* buf, int count) {
     do {
         int written = write(fd, buf, count);
@@ -70,19 +83,6 @@ static int write_fully(int fd, char* buf, int count) {
     } while (count > 0);
 
     return GOOD;
-}
-
-static int get_nfds(int* outfds, int numchildren) {
-    int i, nfds = -1;
-    for (i = 0; i < numchildren; ++i) {
-        int outfd = outfds[i];
-        if (outfd > nfds) {
-            nfds = outfd;
-        }
-    }
-    nfds += 1;
-
-    return nfds;
 }
 
 static int read_write_from_children(int* outfds, int numchildren) {
@@ -189,6 +189,73 @@ static int read_write_from_children(int* outfds, int numchildren) {
             } else {
                 FD_SET(curfd, &rfds);
             }
+        }
+    }
+}
+
+static int read_write_loop(int* fds, int fdtop) {
+    int fdpos = 0;
+    int curfd = fds[fdpos];
+    char buf[BUF_COUNT];
+
+    int saved = 0;
+    int read_amount = BUF_COUNT;
+
+    while (TRUE) {
+        char* buf_part_top;
+        int nlpos;
+        int data_size = read(STDIN_FD, buf + saved, read_amount);
+
+        if (data_size <= 0) {
+            if (saved > 0) {
+                if (write_fully(curfd, buf, saved) < GOOD) {
+                    return ERR;
+                }
+            }
+            if (data_size < GOOD) {
+                perror("Error: Could not read from parent stdin");
+            }
+            return data_size;
+        }
+
+        data_size += saved;
+        buf_part_top = buf + data_size;
+
+        while (buf_part_top --> buf) {
+            if (*buf_part_top == NEWLINE_CH) {
+                break;
+            }
+        }
+
+        nlpos = buf_part_top - buf;
+
+        if (nlpos < GOOD) {
+            if (write_fully(curfd, buf, data_size) < GOOD) {
+                return ERR;
+            }
+
+            saved = 0;
+            read_amount = BUF_COUNT;
+
+        } else {
+            int part_one = nlpos + 1;
+
+            if (write_fully(curfd, buf, part_one) < GOOD) {
+                return ERR;
+            }
+
+            if (fdpos >= fdtop) {
+                fdpos = 0;
+            } else {
+                ++fdpos;
+            }
+            curfd = fds[fdpos];
+
+            saved = data_size - part_one;
+            read_amount = BUF_COUNT - saved;
+
+            /* XXX: overlap? */
+            memcpy(buf, buf + part_one, saved);
         }
     }
 }
@@ -307,73 +374,6 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args, b
     }
 
     return GOOD;
-}
-
-static int read_write_loop(int* fds, int fdtop) {
-    int fdpos = 0;
-    int curfd = fds[fdpos];
-    char buf[BUF_COUNT];
-
-    int saved = 0;
-    int read_amount = BUF_COUNT;
-
-    while (TRUE) {
-        char* buf_part_top;
-        int nlpos;
-        int data_size = read(STDIN_FD, buf + saved, read_amount);
-
-        if (data_size <= 0) {
-            if (saved > 0) {
-                if (write_fully(curfd, buf, saved) < GOOD) {
-                    return ERR;
-                }
-            }
-            if (data_size < GOOD) {
-                perror("Error: Could not read from parent stdin");
-            }
-            return data_size;
-        }
-
-        data_size += saved;
-        buf_part_top = buf + data_size;
-
-        while (buf_part_top --> buf) {
-            if (*buf_part_top == NEWLINE_CH) {
-                break;
-            }
-        }
-
-        nlpos = buf_part_top - buf;
-
-        if (nlpos < GOOD) {
-            if (write_fully(curfd, buf, data_size) < GOOD) {
-                return ERR;
-            }
-
-            saved = 0;
-            read_amount = BUF_COUNT;
-
-        } else {
-            int part_one = nlpos + 1;
-
-            if (write_fully(curfd, buf, part_one) < GOOD) {
-                return ERR;
-            }
-
-            if (fdpos >= fdtop) {
-                fdpos = 0;
-            } else {
-                ++fdpos;
-            }
-            curfd = fds[fdpos];
-
-            saved = data_size - part_one;
-            read_amount = BUF_COUNT - saved;
-
-            /* XXX: overlap? */
-            memcpy(buf, buf + part_one, saved);
-        }
-    }
 }
 
 int main(int argc, char** argv) {
