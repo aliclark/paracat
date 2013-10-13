@@ -107,9 +107,10 @@ static int read_write_from_children(int* outfds, int numchildren) {
         }
 
         for (i = 0; i < numchildren; ++i) {
-            if (FD_ISSET(outfds[i], &rfds)) {
+            int curfd = outfds[i];
+
+            if (FD_ISSET(curfd, &rfds)) {
                 char* buf = buffers[i];
-                int curfd = outfds[i];
                 int saved = buffered[i];
 
                 while (TRUE) {
