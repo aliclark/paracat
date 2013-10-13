@@ -181,7 +181,7 @@ static int read_write_from_children(int* outfds, int numchildren) {
     }
 }
 
-static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args, bool recombine_flag) {
+static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args, bool recombine_flag, pid_t* recombine_pid) {
     int fd[2];
     int out[2];
     int i;
@@ -279,6 +279,8 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args, b
             read_write_from_children(outfds, numchildren);
 
         } else {
+            *recombine_pid = pid;
+
             for (i = 0; i < numchildren; ++i) {
                 if (close(outfds[i]) < GOOD) {
                     perror("Error: Could not close parent process pipe's output");
@@ -365,7 +367,9 @@ int main(int argc, char** argv) {
     int numpids = 0;
     char* end = NULL;
     char** command;
+    int status;
 
+    pid_t recombine_pid;
     int recombine_flag = 1;
 
     struct option long_options[] = {
@@ -431,7 +435,7 @@ int main(int argc, char** argv) {
     pids = (pid_t*)malloc(sizeof(pid_t) * numpids);
     fds = (int*)malloc(sizeof(int) * numpids);
 
-    if (spawn_children(pids, fds, numpids, command, recombine_flag) < GOOD) {
+    if (spawn_children(pids, fds, numpids, command, recombine_flag, &recombine_pid) < GOOD) {
         return 2;
     }
 
@@ -447,8 +451,6 @@ int main(int argc, char** argv) {
     }
 
     for (i = 0; i < numpids; ++i) {
-        int status;
-
         if (waitpid(pids[i], &status, NO_OPTIONS) < GOOD) {
             fprintf(stderr, "Error: Could not wait for child pid: %d, %s\n", pids[i], strerror(errno));
             /* continue anyway */
@@ -456,6 +458,17 @@ int main(int argc, char** argv) {
 
         if (status != GOOD) {
             fprintf(stderr, "Warning: got exit status: %d, from child pid: %d\n", status, pids[i]);
+        }
+    }
+
+    if (recombine_flag) {
+        if (waitpid(recombine_pid, &status, NO_OPTIONS) < GOOD) {
+            fprintf(stderr, "Error: Could not wait for reader pid: %d, %s\n", pids[i], strerror(errno));
+            /* continue anyway */
+        }
+
+        if (status != GOOD) {
+            fprintf(stderr, "Warning: got exit status: %d, from reader pid: %d\n", status, pids[i]);
         }
     }
 
