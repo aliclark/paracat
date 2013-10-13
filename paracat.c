@@ -314,17 +314,17 @@ static int read_write_loop(int* fds, int fdtop) {
     int curfd = fds[fdpos];
     char buf[BUF_COUNT];
 
-    int part_two = 0;
+    int saved = 0;
     int read_amount = BUF_COUNT;
 
     while (TRUE) {
         char* buf_part_top;
         int nlpos;
-        int data_size = read(STDIN_FD, buf + part_two, read_amount);
+        int data_size = read(STDIN_FD, buf + saved, read_amount);
 
         if (data_size <= 0) {
-            if (part_two > 0) {
-                if (write_fully(curfd, buf, part_two) < GOOD) {
+            if (saved > 0) {
+                if (write_fully(curfd, buf, saved) < GOOD) {
                     return ERR;
                 }
             }
@@ -334,7 +334,7 @@ static int read_write_loop(int* fds, int fdtop) {
             return data_size;
         }
 
-        data_size += part_two;
+        data_size += saved;
         buf_part_top = buf + data_size;
 
         while (buf_part_top --> buf) {
@@ -350,7 +350,7 @@ static int read_write_loop(int* fds, int fdtop) {
                 return ERR;
             }
 
-            part_two = 0;
+            saved = 0;
             read_amount = BUF_COUNT;
 
         } else {
@@ -367,11 +367,11 @@ static int read_write_loop(int* fds, int fdtop) {
             }
             curfd = fds[fdpos];
 
-            part_two = data_size - part_one;
-            read_amount = BUF_COUNT - part_two;
+            saved = data_size - part_one;
+            read_amount = BUF_COUNT - saved;
 
             /* XXX: overlap? */
-            memcpy(buf, buf + part_one, part_two);
+            memcpy(buf, buf + part_one, saved);
         }
     }
 }
