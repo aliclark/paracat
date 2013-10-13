@@ -23,6 +23,7 @@
 
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/select.h>
 
 #include <unistd.h>
 
@@ -70,8 +71,8 @@ static int write_fully(int fd, char* buf, int count) {
 }
 
 static int read_write_from_children(int* outfds, int numchildren) {
-    char* buf;
-    int i, fdtop, fdpos, curfd, saved;
+    int i;
+    fd_set rfds;
     char** buffers = (char**)malloc(sizeof(char*) * numchildren);
     int* buffered = (int*)malloc(sizeof(int) * numchildren);
     bool* closed = (int*)malloc(sizeof(bool) * numchildren);
@@ -82,101 +83,94 @@ static int read_write_from_children(int* outfds, int numchildren) {
         closed[i] = FALSE;
     }
 
-    fdtop = numchildren - 1;
-    fdpos = 0;
-
-    curfd = outfds[fdpos];
-    saved = buffered[fdpos];
-    buf = buffers[fdpos];
-
-    /*
-      Round-robin reading data from the stdouts.
-
-      TODO: this is bad because we may block on a child that has
-      nothing to output while another is spewing output - use
-      non-blocking io.
-    */
-
     while (TRUE) {
-        int nlpos;
-        char* buf_part_top;
-        int data_size = read(curfd, buf + saved, BUF_COUNT - saved);
-
-        if (data_size <= 0) {
-            int startpos = fdpos;
-
-            if (saved > 0) {
-                if (write_fully(STDOUT_FD, buf, saved) < GOOD) {
-                    _exit(1);
+        int nfds = -1;
+        FD_ZERO(&rfds);
+        for (i = 0; i < numchildren; ++i) {
+            if (!closed[i]) {
+                int outfd = outfds[i];
+                if (outfd > nfds) {
+                    nfds = outfd;
                 }
-            }
-            if (data_size < GOOD) {
-                _exit(1);
-            }
-
-            closed[fdpos] = TRUE;
-
-            do {
-                if (fdpos >= fdtop) {
-                    fdpos = 0;
-                } else {
-                    ++fdpos;
-                }
-                if (!closed[fdpos]) {
-                    break;
-                }
-            } while (fdpos != startpos);
-
-            if (fdpos == startpos) {
-                /* Couldn't find an open input, time to exit */
-                _exit(0);
-            }
-
-            curfd = outfds[fdpos];
-            saved = buffered[fdpos];
-            buf = buffers[fdpos];
-        }
-
-        data_size += saved;
-        buf_part_top = buf + data_size;
-
-        while (buf_part_top --> buf) {
-            if (*buf_part_top == NEWLINE_CH) {
-                break;
+                FD_SET(outfd, &rfds);
             }
         }
 
-        nlpos = buf_part_top - buf;
+        if (select(nfds + 1, &rfds, NULL, NULL, NULL) < GOOD) {
+            perror("Error: could not select child input");
+        }
 
-        if (nlpos < GOOD) {
-            if (write_fully(STDOUT_FD, buf, data_size) < GOOD) {
-                return ERR;
+        for (i = 0; i < numchildren; ++i) {
+            if (!closed[i] && FD_ISSET(outfds[i], &rfds)) {
+                char* buf = buffers[i];
+                int curfd = outfds[i];
+                int saved = buffered[i];
+
+                while (TRUE) {
+                    int nlpos, j;
+                    char* buf_part_top;
+                    int data_size = read(curfd, buf + saved, BUF_COUNT - saved);
+
+                    if (data_size <= 0) {
+
+                        if (saved > 0) {
+                            if (write_fully(STDOUT_FD, buf, saved) < GOOD) {
+                                _exit(1);
+                            }
+                        }
+                        if (data_size < GOOD) {
+                            _exit(1);
+                        }
+
+                        closed[i] = TRUE;
+
+                        for (j = 0; j < numchildren; ++j) {
+                            if (!closed[j]) {
+                                break;
+                            }
+                        }
+                        if (j == numchildren) {
+                            _exit(0);
+                        }
+
+                        break;
+                    }
+
+                    data_size += saved;
+                    buf_part_top = buf + data_size;
+
+                    while (buf_part_top --> buf) {
+                        if (*buf_part_top == NEWLINE_CH) {
+                            break;
+                        }
+                    }
+
+                    nlpos = buf_part_top - buf;
+
+                    if (nlpos < GOOD) {
+                        if (write_fully(STDOUT_FD, buf, data_size) < GOOD) {
+                            return ERR;
+                        }
+
+                        saved = 0;
+
+                    } else {
+                        int part_one = nlpos + 1;
+
+                        if (write_fully(STDOUT_FD, buf, part_one) < GOOD) {
+                            return ERR;
+                        }
+
+                        saved = data_size - part_one;
+
+                        /* XXX: overlap? */
+                        memcpy(buf, buf + part_one, saved);
+                        buffered[i] = saved;
+
+                        break;
+                    }
+                }
             }
-
-            saved = 0;
-
-        } else {
-            int part_one = nlpos + 1;
-
-            if (write_fully(STDOUT_FD, buf, part_one) < GOOD) {
-                return ERR;
-            }
-
-            saved = data_size - part_one;
-
-            /* XXX: overlap? */
-            memcpy(buf, buf + part_one, saved);
-            buffered[fdpos] = saved;
-
-            if (fdpos >= fdtop) {
-                fdpos = 0;
-            } else {
-                ++fdpos;
-            }
-
-            curfd = outfds[fdpos];
-            saved = buffered[fdpos];
-            buf = buffers[fdpos];
         }
     }
 }
