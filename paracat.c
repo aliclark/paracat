@@ -172,6 +172,8 @@ static int read_write_loop(int* fds, int fdtop) {
 
             part_two = data_size - part_one;
             read_amount = BUF_COUNT - part_two;
+
+            /* XXX: overlap? */
             memcpy(buf, buf + part_one, part_two);
         }
     }
