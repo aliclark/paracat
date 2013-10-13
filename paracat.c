@@ -75,25 +75,21 @@ static int read_write_from_children(int* outfds, int numchildren) {
     fd_set rfds;
     char** buffers = (char**)malloc(sizeof(char*) * numchildren);
     int* buffered = (int*)malloc(sizeof(int) * numchildren);
-    bool* closed = (int*)malloc(sizeof(bool) * numchildren);
 
     for (i = 0; i < numchildren; ++i) {
         buffers[i] = (char*)malloc(sizeof(char) * BUF_COUNT);
         buffered[i] = 0;
-        closed[i] = FALSE;
     }
 
     while (TRUE) {
         int nfds = -1;
         FD_ZERO(&rfds);
         for (i = 0; i < numchildren; ++i) {
-            if (!closed[i]) {
-                int outfd = outfds[i];
-                if (outfd > nfds) {
-                    nfds = outfd;
-                }
-                FD_SET(outfd, &rfds);
+            int outfd = outfds[i];
+            if (outfd > nfds) {
+                nfds = outfd;
             }
+            FD_SET(outfd, &rfds);
         }
 
         if (select(nfds + 1, &rfds, NULL, NULL, NULL) < GOOD) {
@@ -101,7 +97,7 @@ static int read_write_from_children(int* outfds, int numchildren) {
         }
 
         for (i = 0; i < numchildren; ++i) {
-            if (!closed[i] && FD_ISSET(outfds[i], &rfds)) {
+            if (FD_ISSET(outfds[i], &rfds)) {
                 char* buf = buffers[i];
                 int curfd = outfds[i];
                 int saved = buffered[i];
@@ -122,17 +118,19 @@ static int read_write_from_children(int* outfds, int numchildren) {
                             _exit(1);
                         }
 
-                        closed[i] = TRUE;
-
-                        for (j = 0; j < numchildren; ++j) {
-                            if (!closed[j]) {
-                                break;
-                            }
+                        for (j = i + 1; j < numchildren; ++j) {
+                            outfds[j-1] = outfds[j];
+                            buffers[j-1] = buffers[j];
+                            buffered[j-1] = buffered[j];
                         }
-                        if (j == numchildren) {
+                        --numchildren;
+
+                        if (numchildren == 0) {
                             _exit(0);
                         }
 
+                        /* re-evaluate this loop number */
+                        --i;
                         break;
                     }
 
