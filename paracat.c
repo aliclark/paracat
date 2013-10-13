@@ -378,6 +378,11 @@ int main(int argc, char** argv) {
         {0, 0, 0, 0}
     };
 
+    char** argv_copy = malloc(sizeof(char**) * argc);
+    for (i = 0; i < argc; ++i) {
+        argv_copy[i] = argv[i];
+    }
+
     while (TRUE) {
         int option_index = 0;
         int c = getopt_long(argc, argv, "hn:", long_options, &option_index);
@@ -398,10 +403,12 @@ int main(int argc, char** argv) {
             numpids = strtol(optarg, &end, NUM_BASE);
             if (*end) {
                 fprintf(stderr, "Error: Could not parse spawn count: %s\n", end);
+                fputs(USAGE_STRING, stderr);
                 return 1;
             }
             if (numpids < 1) {
                 fputs("Error: spawn count must be 1 or greater\n", stderr);
+                fputs(USAGE_STRING, stderr);
                 return 1;
             }
             break;
@@ -422,6 +429,16 @@ int main(int argc, char** argv) {
         fputs("Command separator -- is required.\n", stderr);
         fputs(USAGE_STRING, stderr);
         return 5;
+    }
+
+    for (i = 0; i < argc; ++i) {
+        if (strcmp("--", argv_copy[i]) == 0) {
+            if (i != (optind - 1)) {
+                fputs("Unrecognised arguments before -- separator.\n", stderr);
+                fputs(USAGE_STRING, stderr);
+                return 5;
+            }
+        }
     }
 
     if (optind >= argc) {
