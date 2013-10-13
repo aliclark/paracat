@@ -283,7 +283,7 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args, b
             for (i = 0; i < numchildren; ++i) {
                 if (close(fds[i]) < GOOD) {
                     perror("Error: Could not close parent process pipe's output");
-                    return ERR;
+                    _exit(1);
                 }
             }
 
