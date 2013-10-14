@@ -383,18 +383,20 @@ int main(int argc, char** argv) {
     int numpids = 0;
     char* end = NULL;
     char** command;
+    char** argv_copy;
     int status;
 
     pid_t recombine_pid = 0;
     int recombine_flag = 1;
 
     struct option long_options[] = {
-        {"no-recombine", no_argument, &recombine_flag, 0},
-        {"help",         no_argument, NULL,            'h'},
+        {"no-recombine", no_argument, NULL, 0},
+        {"help",         no_argument, NULL, 'h'},
         {0, 0, 0, 0}
     };
+    long_options[0].flag = &recombine_flag;
 
-    char** argv_copy = (char**)malloc(sizeof(char**) * argc);
+    argv_copy = (char**)malloc(sizeof(char**) * argc);
     for (i = 0; i < argc; ++i) {
         argv_copy[i] = argv[i];
     }
