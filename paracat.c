@@ -530,6 +530,7 @@ int main(int argc, char** argv) {
                 fputs(USAGE_STRING, stderr);
                 return 5;
             }
+            break;
         }
     }
 
