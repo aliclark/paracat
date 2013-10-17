@@ -512,9 +512,8 @@ int main(int argc, char** argv) {
     }
 
     if (numpids == 0) {
-        fputs("Parameter -n is required.\n", stderr);
-        fputs(USAGE_STRING, stderr);
-        return 5;
+        /* Default to 2 if not specified */
+        numpids = 2;
     }
 
     if (strcmp("--", argv[optind - 1]) != GOOD) {
