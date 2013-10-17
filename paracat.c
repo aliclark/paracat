@@ -56,6 +56,71 @@
 typedef int bool;
 #endif
 
+static int string_char_count(char* str, char c) {
+    int count = 0;
+
+    while (TRUE) {
+        char x = *str++;
+        if (x == '\0') {
+            break;
+        }
+        if (x == c) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static char* sh_escape_string(char* dest, char* src) {
+    *dest++ = '\'';
+    while (TRUE) {
+        char x = *src++;
+        if (x == '\'') {
+            *dest++ = '\'';
+            *dest++ = '\\';
+            *dest++ = '\'';
+        } else if (x == '\0') {
+            *dest++ = '\'';
+            break;
+        }
+        *dest++ = x;
+    }
+    *dest = '\0';
+    return dest;
+}
+
+/*
+ * Return a string that can be passed to /bin/sh -c
+ */
+static char* sh_build_command(char** args) {
+    char* dest;
+    char* dest_start;
+    int i, count = 0;
+
+    if (!args[0]) {
+        return NULL;
+    }
+
+    for (i = 0; args[i]; ++i) {
+        int quote_count = string_char_count(args[i], '\'');
+        /* on first iteration the +1 is for the final '\0'
+         * on the others it's for the space separator
+         */
+        count += strlen(args[i]) + (quote_count * 4) + 2 + 1;
+    }
+
+    dest = (char*)malloc(sizeof(char) * count);
+    dest_start = dest;
+
+    for (i = 0; args[i]; ++i) {
+        dest = sh_escape_string(dest, args[i]);
+        *dest++ = ' ';
+    }
+    *(dest - 1) = '\0';
+
+    return dest_start;
+}
+
 static int get_nfds(int* outfds, int numchildren) {
     int i, nfds = -1;
     for (i = 0; i < numchildren; ++i) {
@@ -260,7 +325,8 @@ static int read_write_loop(int* fds, int fdtop) {
     }
 }
 
-static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args, bool recombine_flag, pid_t* recombine_pid) {
+static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args, bool recombine_flag, pid_t* recombine_pid, bool use_sh) {
+    char* sh_start[] = { (char*)"/bin/sh", (char*)"-c", NULL, NULL };
     int fd[2];
     int out[2];
     int i;
@@ -270,6 +336,11 @@ static int spawn_children(pid_t* pids, int* fds, int numchildren, char** args, b
 
     if (recombine_flag) {
         outfds = (int*)malloc(sizeof(int) * numchildren);
+    }
+
+    if (use_sh) {
+        sh_start[2] = sh_build_command(args);
+        args = sh_start;
     }
 
     for (i = 0; i < numchildren; ++i) {
@@ -388,13 +459,16 @@ int main(int argc, char** argv) {
 
     pid_t recombine_pid = 0;
     int recombine_flag = 1;
+    int use_sh_flag = 1;
 
     struct option long_options[] = {
         {"no-recombine", no_argument, NULL, 0},
+        {"no-shell",     no_argument, NULL, 0},
         {"help",         no_argument, NULL, 'h'},
         {0, 0, 0, 0}
     };
     long_options[0].flag = &recombine_flag;
+    long_options[1].flag = &use_sh_flag;
 
     argv_copy = (char**)malloc(sizeof(char**) * argc);
     for (i = 0; i < argc; ++i) {
@@ -470,7 +544,7 @@ int main(int argc, char** argv) {
     pids = (pid_t*)malloc(sizeof(pid_t) * numpids);
     fds = (int*)malloc(sizeof(int) * numpids);
 
-    if (spawn_children(pids, fds, numpids, command, recombine_flag, &recombine_pid) < GOOD) {
+    if (spawn_children(pids, fds, numpids, command, recombine_flag, &recombine_pid, use_sh_flag) < GOOD) {
         return 2;
     }
 
