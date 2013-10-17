@@ -455,6 +455,7 @@ int main(int argc, char** argv) {
     char* end = NULL;
     char** command;
     char** argv_copy;
+    char* default_command[] = { "/bin/cat", NULL };
     int status;
 
     pid_t recombine_pid = 0;
@@ -534,12 +535,10 @@ int main(int argc, char** argv) {
     }
 
     if (optind >= argc) {
-        fputs("Please specify a command after the -- separator.\n", stderr);
-        fputs(USAGE_STRING, stderr);
-        return 5;
+        command = default_command;
+    } else {
+        command = argv + optind;
     }
-
-    command = argv + optind;
 
     pids = (pid_t*)malloc(sizeof(pid_t) * numpids);
     fds = (int*)malloc(sizeof(int) * numpids);
