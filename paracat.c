@@ -470,7 +470,7 @@ int main(int argc, char** argv) {
     char* end = NULL;
     char** command;
     char** argv_copy;
-    char* default_command[] = { "/bin/cat", NULL };
+    char* default_command[] = { (char*)"/bin/cat", NULL };
     int status;
 
     pid_t recombine_pid = 0;
