@@ -137,12 +137,16 @@ static int get_nfds(int* outfds, int numchildren) {
     return nfds;
 }
 
+static void log_write_err(int fd) {
+    fprintf(stderr, "Error: Could not write from parent to fd: %d, %s\n", fd, strerror(errno));
+}
+
 static int write_fully(int fd, char* buf, int count) {
     do {
         int written = write(fd, buf, count);
 
         if (written < GOOD) {
-            fprintf(stderr, "Error: Could not write from parent to fd: %d, %s\n", fd, strerror(errno));
+            log_write_err(fd);
             return written;
         }
         buf += written;
