@@ -249,9 +249,17 @@ static int read_write_from_children(int* outfds, int numchildren) {
                     } else {
                         int part_one = nlpos + 1;
 
-                        if (write_fully(STDOUT_FD, buf, part_one) < GOOD) {
-                            return ERR;
-                        }
+                        int remaining_count = part_one;
+                        do {
+                            int written = write(STDOUT_FD, buf, part_one);
+
+                            if (written < GOOD) {
+                                log_write_err(STDOUT_FD);
+                                return ERR;
+                            }
+                            buf += written;
+                            remaining_count -= written;
+                        } while (remaining_count > 0);
 
                         saved = data_size - part_one;
 
