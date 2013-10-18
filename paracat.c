@@ -21,15 +21,18 @@
 #include <errno.h>
 #include <getopt.h>
 
+/* requires -std=gnu89 at a minimum (or default) for PIPE_BUF constant */
+#include <limits.h>
+
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/select.h>
 
 #include <unistd.h>
 
-#ifndef BUF_COUNT
-/* 4096 seems a good value from tesing */
-#define BUF_COUNT 4096
+#ifndef PIPE_BUF
+/* POSIX.1-2001 requies at least 512, though would be ideal to have 4096 as in Linux */
+#define PIPE_BUF 512
 #endif
 
 #ifndef NUM_BASE
@@ -157,7 +160,7 @@ static int read_write_from_children(int* outfds, int numchildren) {
     int* buffered = (int*)malloc(sizeof(int) * numchildren);
 
     for (i = 0; i < numchildren; ++i) {
-        buffers[i] = (char*)malloc(sizeof(char) * BUF_COUNT);
+        buffers[i] = (char*)malloc(sizeof(char) * PIPE_BUF);
         buffered[i] = 0;
     }
 
@@ -183,7 +186,7 @@ static int read_write_from_children(int* outfds, int numchildren) {
                 while (TRUE) {
                     int nlpos, j;
                     char* buf_part_top;
-                    int data_size = read(curfd, buf + saved, BUF_COUNT - saved);
+                    int data_size = read(curfd, buf + saved, PIPE_BUF - saved);
 
                     if (data_size <= 0) {
 
@@ -261,10 +264,10 @@ static int read_write_from_children(int* outfds, int numchildren) {
 static int read_write_loop(int* fds, int fdtop) {
     int fdpos = 0;
     int curfd = fds[fdpos];
-    char buf[BUF_COUNT];
+    char buf[PIPE_BUF];
 
     int saved = 0;
-    int read_amount = BUF_COUNT;
+    int read_amount = PIPE_BUF;
 
     while (TRUE) {
         char* buf_part_top;
@@ -300,7 +303,7 @@ static int read_write_loop(int* fds, int fdtop) {
             }
 
             saved = 0;
-            read_amount = BUF_COUNT;
+            read_amount = PIPE_BUF;
 
         } else {
             int part_one = nlpos + 1;
@@ -317,7 +320,7 @@ static int read_write_loop(int* fds, int fdtop) {
             curfd = fds[fdpos];
 
             saved = data_size - part_one;
-            read_amount = BUF_COUNT - saved;
+            read_amount = PIPE_BUF - saved;
 
             /* XXX: overlap? */
             memcpy(buf, buf + part_one, saved);
