@@ -280,7 +280,8 @@ static int read_write_loop(int* fds, int fdtop) {
 
         if (data_size <= 0) {
             if (saved > 0) {
-                if (write_fully(curfd, buf, saved) < GOOD) {
+                if (write(curfd, buf, saved) < GOOD) {
+                    log_write_err(curfd);
                     return ERR;
                 }
             }
@@ -302,7 +303,8 @@ static int read_write_loop(int* fds, int fdtop) {
         nlpos = buf_part_top - buf;
 
         if (nlpos < GOOD) {
-            if (write_fully(curfd, buf, data_size) < GOOD) {
+            if (write(curfd, buf, data_size) < GOOD) {
+                log_write_err(curfd);
                 return ERR;
             }
 
@@ -312,7 +314,8 @@ static int read_write_loop(int* fds, int fdtop) {
         } else {
             int part_one = nlpos + 1;
 
-            if (write_fully(curfd, buf, part_one) < GOOD) {
+            if (write(curfd, buf, part_one) < GOOD) {
+                log_write_err(curfd);
                 return ERR;
             }
 
