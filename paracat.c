@@ -35,6 +35,11 @@
 #define PIPE_BUF 512
 #endif
 
+/* Suitable for anything other than writing to a pipe */
+#ifndef FD_BUF
+#define FD_BUF 4096
+#endif
+
 #ifndef NUM_BASE
 #define NUM_BASE 10
 #endif
@@ -164,7 +169,7 @@ static int read_write_from_children(int* outfds, int numchildren) {
     int* buffered = (int*)malloc(sizeof(int) * numchildren);
 
     for (i = 0; i < numchildren; ++i) {
-        buffers[i] = (char*)malloc(sizeof(char) * PIPE_BUF);
+        buffers[i] = (char*)malloc(sizeof(char) * FD_BUF);
         buffered[i] = 0;
     }
 
@@ -190,7 +195,7 @@ static int read_write_from_children(int* outfds, int numchildren) {
                 while (TRUE) {
                     int nlpos, j;
                     char* buf_part_top;
-                    int data_size = read(curfd, buf + saved, PIPE_BUF - saved);
+                    int data_size = read(curfd, buf + saved, FD_BUF - saved);
 
                     if (data_size <= 0) {
 
