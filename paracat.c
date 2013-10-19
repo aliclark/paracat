@@ -37,7 +37,7 @@
 
 /* Suitable for anything other than writing to a pipe */
 #ifndef FD_BUF
-#define FD_BUF 4096
+#define FD_BUF ((PIPE_BUF > 4096) ? PIPE_BUF : 4096)
 #endif
 
 #ifndef NUM_BASE
