@@ -278,6 +278,30 @@ static int read_write_from_children(int* outfds, int numchildren) {
     }
 }
 
+static int read_write_loop_nonl(int fd, char* buf, int count, int* saved, int* read_amount) {
+    if (write(fd, buf, count) < GOOD) {
+        log_write_err(fd);
+        return ERR;
+    }
+
+    *saved = 0;
+    *read_amount = PIPE_BUF;
+    return GOOD;
+}
+
+static int read_write_loop_finish(int fd, char* buf, int count, int data_size) {
+    if (count > 0) {
+        if (write(fd, buf, count) < GOOD) {
+            log_write_err(fd);
+            return ERR;
+        }
+    }
+    if (data_size < GOOD) {
+        perror("Error: Could not read from parent stdin");
+    }
+    return data_size;
+}
+
 static int read_write_loop(int* fds, int fdtop) {
     int fdpos = 0;
     int curfd = fds[fdpos];
@@ -292,16 +316,7 @@ static int read_write_loop(int* fds, int fdtop) {
         int data_size = read(STDIN_FD, buf + saved, read_amount);
 
         if (data_size <= 0) {
-            if (saved > 0) {
-                if (write(curfd, buf, saved) < GOOD) {
-                    log_write_err(curfd);
-                    return ERR;
-                }
-            }
-            if (data_size < GOOD) {
-                perror("Error: Could not read from parent stdin");
-            }
-            return data_size;
+            return read_write_loop_finish(curfd, buf, saved, data_size);
         }
 
         data_size += saved;
@@ -316,14 +331,9 @@ static int read_write_loop(int* fds, int fdtop) {
         nlpos = buf_part_top - buf;
 
         if (nlpos < GOOD) {
-            if (write(curfd, buf, data_size) < GOOD) {
-                log_write_err(curfd);
+            if (read_write_loop_nonl(curfd, buf, data_size, &saved, &read_amount) < GOOD) {
                 return ERR;
             }
-
-            saved = 0;
-            read_amount = PIPE_BUF;
-
         } else {
             int part_one = nlpos + 1;
 
