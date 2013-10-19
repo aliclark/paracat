@@ -162,6 +162,40 @@ static int write_fully(int fd, char* buf, int count) {
     return GOOD;
 }
 
+static int read_write_from_children_end(char* buf, int count, int data_size,
+                                        int* pnumchildren, int* outfds,
+                                        char** buffers, int* buffered,
+                                        int curfd, fd_set* prfds, int* pi, int* nfds) {
+    int j;
+    if (count > 0) {
+        if (write_fully(STDOUT_FD, buf, count) < GOOD) {
+            return -1;
+        }
+    }
+    if (data_size < GOOD) {
+        perror("Error: Could not read from child stdout");
+        return -1;
+    }
+
+    for (j = *pi + 1; j < *pnumchildren; ++j) {
+        outfds[j-1] = outfds[j];
+        buffers[j-1] = buffers[j];
+        buffered[j-1] = buffered[j];
+    }
+    --*pnumchildren;
+
+    if (*pnumchildren == 0) {
+        return 0;
+    }
+
+    FD_CLR(curfd, prfds);
+    *nfds = get_nfds(outfds, *pnumchildren);
+
+    /* re-evaluate this loop number */
+    --*pi;
+    return 1;
+}
+
 static int read_write_from_children(int* outfds, int numchildren) {
     int i, nfds;
     fd_set rfds;
@@ -193,38 +227,19 @@ static int read_write_from_children(int* outfds, int numchildren) {
                 int saved = buffered[i];
 
                 while (TRUE) {
-                    int nlpos, j;
+                    int nlpos;
                     char* buf_part_top;
                     int data_size = read(curfd, buf + saved, FD_BUF - saved);
 
                     if (data_size <= 0) {
-
-                        if (saved > 0) {
-                            if (write_fully(STDOUT_FD, buf, saved) < GOOD) {
-                                return ERR;
-                            }
+                        int rv = read_write_from_children_end(buf, saved,
+                                                              data_size, &numchildren,
+                                                              outfds, buffers,
+                                                              buffered, curfd,
+                                                              &rfds, &i, &nfds);
+                        if (rv <= 0) {
+                            return rv;
                         }
-                        if (data_size < GOOD) {
-                            perror("Error: Could not read from child stdout");
-                            return ERR;
-                        }
-
-                        for (j = i + 1; j < numchildren; ++j) {
-                            outfds[j-1] = outfds[j];
-                            buffers[j-1] = buffers[j];
-                            buffered[j-1] = buffered[j];
-                        }
-                        --numchildren;
-
-                        if (numchildren == 0) {
-                            return GOOD;
-                        }
-
-                        FD_CLR(curfd, &rfds);
-                        nfds = get_nfds(outfds, numchildren);
-
-                        /* re-evaluate this loop number */
-                        --i;
                         break;
                     }
 
