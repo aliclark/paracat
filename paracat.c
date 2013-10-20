@@ -526,7 +526,7 @@ int main(int argc, char** argv) {
 
     while (TRUE) {
         int option_index = 0;
-        int c = getopt_long(argc, argv, "hn:", long_options, &option_index);
+        int c = getopt_long(argc, argv, "+hn:", long_options, &option_index);
      
         if (c == -1) {
             break;
@@ -563,23 +563,6 @@ int main(int argc, char** argv) {
     if (numpids == 0) {
         /* Default to 2 if not specified */
         numpids = 2;
-    }
-
-    if (strcmp("--", argv[optind - 1]) != GOOD) {
-        fputs("Command separator -- is required.\n", stderr);
-        fputs(USAGE_STRING, stderr);
-        return 5;
-    }
-
-    for (i = 0; i < argc; ++i) {
-        if (strcmp("--", argv_copy[i]) == 0) {
-            if (i != (optind - 1)) {
-                fputs("Unrecognised arguments before -- separator.\n", stderr);
-                fputs(USAGE_STRING, stderr);
-                return 5;
-            }
-            break;
-        }
     }
 
     if (optind >= argc) {
