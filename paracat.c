@@ -58,7 +58,7 @@
 #define CHILD 0
 #define NO_OPTIONS 0
 
-#define USAGE_STRING "Usage: paracat -n NUMPROCS -- COMMAND ARG1 ARG2 ...\n"
+#define USAGE_STRING "Usage: paracat [--no-shell] [--no-recombine] [-n numprocs] [--] [command [arg ...]]\n"
 
 #ifndef __cplusplus
 typedef int bool;
