@@ -278,8 +278,7 @@ static int read_write_from_children(int* outfds, int numchildren) {
 
                         saved = data_size - part_one;
 
-                        /* XXX: overlap? */
-                        memcpy(buf, buf + part_one, saved);
+                        memmove(buf, buf + part_one, saved);
                         buffered[i] = saved;
 
                         break;
@@ -367,8 +366,7 @@ static int read_write_loop(int* fds, int fdtop) {
             saved = data_size - part_one;
             read_amount = PIPE_BUF - saved;
 
-            /* XXX: overlap? */
-            memcpy(buf, buf + part_one, saved);
+            memmove(buf, buf + part_one, saved);
         }
     }
 }
